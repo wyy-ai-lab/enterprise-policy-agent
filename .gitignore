@@ -1,0 +1,20 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.env
+
+# Streamlit secrets
+.streamlit/secrets.toml
+
+# Generated data / reports
+data/*.json
+output/*.json
+*.docx
+*.pdf
+*.md
+*.html
+
+# OS
+.DS_Store
+Thumbs.db
