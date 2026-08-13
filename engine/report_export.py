@@ -37,7 +37,13 @@ POLICY_PRIORITY = {
 
 
 def _find_cjk_font() -> str:
-    """在 Windows 常见字体目录查找中文字体（优先用 .ttf，兼容 fpdf2）"""
+    """查找中文字体路径：优先项目内置字体，再查找 Windows 系统字体"""
+    # 1. 优先使用项目内置字体（兼容 Streamlit Cloud / Linux / macOS）
+    bundled = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "assets", "fonts", "NotoSansSC-Regular.ttf")
+    if os.path.exists(bundled):
+        return bundled
+
+    # 2.  fallback 到 Windows 常见字体目录
     candidates = [
         r"C:\Windows\Fonts\simhei.ttf",
         r"C:\Windows\Fonts\simsun.ttc",
