@@ -10,6 +10,10 @@ __pycache__/
 # Generated data / reports
 data/*.json
 output/*.json
+
+# Keep default policy library and enterprise profile for deployment
+!data/policies.json
+!data/enterprise.json
 *.docx
 *.pdf
 *.md
