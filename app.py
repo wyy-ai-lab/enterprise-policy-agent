@@ -213,6 +213,10 @@ st.markdown("""
         <div class="capability-grid-text">申报材料大纲生成（针对「立即申报」「培育申报」政策）</div>
     </div>
     <div class="capability-grid-item">
+        <div class="capability-grid-icon">📚</div>
+        <div class="capability-grid-text">政策库批量导入导出（Excel / CSV / JSON）</div>
+    </div>
+    <div class="capability-grid-item">
         <div class="capability-grid-icon">🎯</div>
         <div class="capability-grid-text">顶部步骤指示器（企业画像 → 政策诊断 → 诊断报告）</div>
     </div>
