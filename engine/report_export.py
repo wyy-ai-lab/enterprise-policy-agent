@@ -37,13 +37,8 @@ POLICY_PRIORITY = {
 
 
 def _find_cjk_font() -> str:
-    """查找中文字体路径：优先项目内置字体，再查找 Windows 系统字体"""
-    # 1. 优先使用项目内置字体（兼容 Streamlit Cloud / Linux / macOS）
-    bundled = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "assets", "fonts", "NotoSansSC-Regular.ttf")
-    if os.path.exists(bundled):
-        return bundled
-
-    # 2.  fallback 到 Windows 常见字体目录
+    """查找中文字体路径：优先本地字体，其次项目内置，最后尝试从网络下载（适配 Streamlit Cloud）"""
+    # 1. Windows 系统字体（本地开发环境）
     candidates = [
         r"C:\Windows\Fonts\simhei.ttf",
         r"C:\Windows\Fonts\simsun.ttc",
@@ -54,6 +49,35 @@ def _find_cjk_font() -> str:
     for p in candidates:
         if os.path.exists(p):
             return p
+
+    # 2. 项目内置字体
+    bundled = os.path.join(
+        os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
+        "assets", "fonts", "NotoSansCJKsc-Regular.otf"
+    )
+    if os.path.exists(bundled):
+        return bundled
+
+    # 3. 缓存字体（之前下载过）
+    cache_dir = os.path.join(os.path.expanduser("~"), ".cache", "enterprise-policy-agent")
+    cached = os.path.join(cache_dir, "NotoSansCJKsc-Regular.otf")
+    if os.path.exists(cached):
+        return cached
+
+    # 4. 尝试从 GitHub 下载开源字体（Streamlit Cloud 等 Linux 环境）
+    font_url = (
+        "https://github.com/notofonts/noto-cjk/raw/main/"
+        "Sans/OTF/SimplifiedChinese/NotoSansCJKsc-Regular.otf"
+    )
+    try:
+        import urllib.request
+        os.makedirs(cache_dir, exist_ok=True)
+        urllib.request.urlretrieve(font_url, cached)
+        if os.path.exists(cached) and os.path.getsize(cached) > 100000:
+            return cached
+    except Exception:
+        pass
+
     return ""
 
 
