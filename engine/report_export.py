@@ -125,6 +125,13 @@ def _table_row(pdf, cells, col_widths, line_height, aligns=None, fills=None, fon
     return row_height
 
 
+def _safe_multi_cell(pdf, text, line_height=5):
+    """重置 x 到左边距后渲染多行文本，避免文字漂到右侧"""
+    pdf.set_x(pdf.l_margin)
+    content_width = pdf.w - pdf.l_margin - pdf.r_margin
+    pdf.multi_cell(content_width, line_height, str(text))
+
+
 def _avg_combined_score(results: List[Dict[str, Any]]) -> float:
     """计算平均综合匹配度"""
     scores = [r.get('combined_score', r.get('match_score', 0)) for r in results]
@@ -1036,9 +1043,9 @@ def build_pdf_report(
             pdf.cell(0, 8, stripped[3:], ln=True)
             pdf.set_font("cn", "", 10)
         elif stripped.startswith('- '):
-            pdf.multi_cell(content_width, 5, '  - ' + stripped[2:])
+            _safe_multi_cell(pdf, '  - ' + stripped[2:])
         else:
-            pdf.multi_cell(content_width, 5, stripped)
+            _safe_multi_cell(pdf, stripped)
 
     # ========== 企业画像快照 ==========
     pdf.add_page()
@@ -1049,7 +1056,7 @@ def build_pdf_report(
     pdf.set_font("cn", "", 10)
     ep = sections['enterprise_profile']
     if ep['available']:
-        pdf.multi_cell(content_width, 5, ep['text'])
+        _safe_multi_cell(pdf, ep['text'])
         pdf.ln(3)
         profile_rows = [
             ('所属行业', f"{ep['industry']}（{ep['sub_industry']}）"),
@@ -1076,7 +1083,7 @@ def build_pdf_report(
         for label, value in profile_rows:
             _table_row(pdf, [label, value], col_widths, line_height)
     else:
-        pdf.multi_cell(content_width, 5, ep['text'])
+        _safe_multi_cell(pdf, ep['text'])
 
     # ========== 诊断结果总览 ==========
     pdf.add_page()
@@ -1104,11 +1111,11 @@ def build_pdf_report(
     pdf.ln(3)
     pdf.set_font("cn", "", 10)
     metrics = sections['metrics']
-    pdf.multi_cell(content_width, 5, f"平均综合匹配度：{sections['avg_score']} 分")
-    pdf.multi_cell(content_width, 5, f"紧急截止政策数：{metrics['urgent_count']} 条")
-    pdf.multi_cell(content_width, 5, f"已过期政策数：{metrics['expired_count']} 条")
+    _safe_multi_cell(pdf, f"平均综合匹配度：{sections['avg_score']} 分")
+    _safe_multi_cell(pdf, f"紧急截止政策数：{metrics['urgent_count']} 条")
+    _safe_multi_cell(pdf, f"已过期政策数：{metrics['expired_count']} 条")
     if metrics['nearest_deadline']:
-        pdf.multi_cell(content_width, 5, f"最近截止日：{metrics['nearest_deadline']}（剩 {metrics['nearest_days']} 天）")
+        _safe_multi_cell(pdf, f"最近截止日：{metrics['nearest_deadline']}（剩 {metrics['nearest_days']} 天）")
 
     # ========== 高频差距与短板分析 ==========
     pdf.add_page()
@@ -1126,7 +1133,7 @@ def build_pdf_report(
         for name, count in sections['gap_analysis']:
             _table_row(pdf, [name, f"{count} 条"], col_widths, line_height, aligns=['L', 'C'])
     else:
-        pdf.multi_cell(content_width, 5, "未发现显著高频差距项。")
+        _safe_multi_cell(pdf, "未发现显著高频差距项。")
 
     # ========== TOP3 路线图 ==========
     pdf.add_page()
@@ -1163,19 +1170,19 @@ def build_pdf_report(
             pdf.set_font("cn", "B", 12)
             pdf.cell(0, 8, f"{p['rank']}. {p['policy_name']}", ln=True)
             pdf.set_font("cn", "", 10)
-            pdf.multi_cell(content_width, 5, f"诊断结果：{p['diagnosis']}")
-            pdf.multi_cell(content_width, 5, f"综合分数：{p['combined_score']} 分")
-            pdf.multi_cell(content_width, 5, f"政策优先级：{p['priority']}")
-            pdf.multi_cell(content_width, 5, f"申报时间线：{p['timeline_advice']}")
+            _safe_multi_cell(pdf, f"诊断结果：{p['diagnosis']}")
+            _safe_multi_cell(pdf, f"综合分数：{p['combined_score']} 分")
+            _safe_multi_cell(pdf, f"政策优先级：{p['priority']}")
+            _safe_multi_cell(pdf, f"申报时间线：{p['timeline_advice']}")
             if p['deadline']:
                 status = p['deadline_status']
-                pdf.multi_cell(content_width, 5, f"截止日：{p['deadline']}（{status['status_text']}）")
-            pdf.multi_cell(content_width, 5, f"扶持内容：{p['benefit']}")
+                _safe_multi_cell(pdf, f"截止日：{p['deadline']}（{status['status_text']}）")
+            _safe_multi_cell(pdf, f"扶持内容：{p['benefit']}")
             if p['key_gaps']:
-                pdf.multi_cell(content_width, 5, f"关键差距：{'、'.join(p['key_gaps'])}")
+                _safe_multi_cell(pdf, f"关键差距：{'、'.join(p['key_gaps'])}")
             pdf.ln(2)
     else:
-        pdf.multi_cell(content_width, 5, "暂无推荐政策。")
+        _safe_multi_cell(pdf, "暂无推荐政策。")
 
     # ========== 雷达图 / 维度分数 ==========
     pdf.add_page()
@@ -1188,7 +1195,7 @@ def build_pdf_report(
         pdf.image(image_stream, x=30, w=150)
     else:
         pdf.set_font("cn", "", 10)
-        pdf.multi_cell(content_width, 5, "（未安装 kaleido，以下用表格展示维度分数）")
+        _safe_multi_cell(pdf, "（未安装 kaleido，以下用表格展示维度分数）")
         pdf.ln(2)
         col_widths = [60, 40, 40]
         line_height = 6
@@ -1204,7 +1211,7 @@ def build_pdf_report(
     pdf.cell(0, 8, "维度短板建议", ln=True)
     pdf.set_font("cn", "", 10)
     for item in sections['capability_assessment']:
-        pdf.multi_cell(content_width, 5, '- ' + item)
+        _safe_multi_cell(pdf, '- ' + item)
 
     # ========== 全部政策诊断明细 ==========
     pdf.add_page()
@@ -1231,7 +1238,7 @@ def build_pdf_report(
 
     pdf.ln(3)
     pdf.set_font("cn", "", 10)
-    pdf.multi_cell(content_width, 5, f"平均综合匹配度：{sections['avg_score']} 分")
+    _safe_multi_cell(pdf, f"平均综合匹配度：{sections['avg_score']} 分")
 
     # ========== 详细诊断结果 ==========
     pdf.add_page()
@@ -1259,60 +1266,60 @@ def build_pdf_report(
             pdf.set_font("cn", "", 10)
 
             if sections['is_enhanced'] and 'combined_score' in r:
-                pdf.multi_cell(content_width, 5, f"综合匹配度：{r['combined_score']} 分（硬 {r['hard_score']} + 软 {r.get('soft_score', 'N/A')}）")
+                _safe_multi_cell(pdf, f"综合匹配度：{r['combined_score']} 分（硬 {r['hard_score']} + 软 {r.get('soft_score', 'N/A')}）")
             else:
-                pdf.multi_cell(content_width, 5, f"匹配度：{r['match_score']} 分")
+                _safe_multi_cell(pdf, f"匹配度：{r['match_score']} 分")
 
-            pdf.multi_cell(content_width, 5, f"政策层级：{r['level']}")
-            pdf.multi_cell(content_width, 5, f"申报截止：{r['deadline']}")
-            pdf.multi_cell(content_width, 5, f"扶持内容：{r['benefit']}")
-            pdf.multi_cell(content_width, 5, f"诊断理由：{r['reason']}")
+            _safe_multi_cell(pdf, f"政策层级：{r['level']}")
+            _safe_multi_cell(pdf, f"申报截止：{r['deadline']}")
+            _safe_multi_cell(pdf, f"扶持内容：{r['benefit']}")
+            _safe_multi_cell(pdf, f"诊断理由：{r['reason']}")
 
             if r['failed']:
-                pdf.multi_cell(content_width, 5, "差距：")
+                _safe_multi_cell(pdf, "差距：")
                 for item in r['failed']:
-                    pdf.multi_cell(content_width, 5, '  - ' + item)
+                    _safe_multi_cell(pdf, '  - ' + item)
 
             if r['unknown']:
-                pdf.multi_cell(content_width, 5, "需补充数据：")
+                _safe_multi_cell(pdf, "需补充数据：")
                 for item in r['unknown']:
-                    pdf.multi_cell(content_width, 5, '  - ' + item)
+                    _safe_multi_cell(pdf, '  - ' + item)
 
             if sections['is_enhanced'] and r.get('soft_score') is not None:
-                pdf.multi_cell(content_width, 5, f"LLM 软条件评估：{r['soft_score']} 分（置信度：{r.get('confidence', '未知')}）")
-                pdf.multi_cell(content_width, 5, f"综合评估：{r.get('soft_assessment', '')}")
+                _safe_multi_cell(pdf, f"LLM 软条件评估：{r['soft_score']} 分（置信度：{r.get('confidence', '未知')}）")
+                _safe_multi_cell(pdf, f"综合评估：{r.get('soft_assessment', '')}")
 
                 if r.get('strengths'):
-                    pdf.multi_cell(content_width, 5, "优势：")
+                    _safe_multi_cell(pdf, "优势：")
                     for item in r['strengths']:
-                        pdf.multi_cell(content_width, 5, '  - ' + item)
+                        _safe_multi_cell(pdf, '  - ' + item)
 
                 if r.get('weaknesses'):
-                    pdf.multi_cell(content_width, 5, "短板：")
+                    _safe_multi_cell(pdf, "短板：")
                     for item in r['weaknesses']:
-                        pdf.multi_cell(content_width, 5, '  - ' + item)
+                        _safe_multi_cell(pdf, '  - ' + item)
 
                 if r.get('cultivation_suggestions'):
-                    pdf.multi_cell(content_width, 5, "培育建议：")
+                    _safe_multi_cell(pdf, "培育建议：")
                     for item in r['cultivation_suggestions']:
-                        pdf.multi_cell(content_width, 5, '  - ' + item)
+                        _safe_multi_cell(pdf, '  - ' + item)
 
             if r.get('material_outline'):
                 outline = r['material_outline']
-                pdf.multi_cell(content_width, 5, f"申报可行性：{outline.get('applicability', '')}")
-                pdf.multi_cell(content_width, 5, "申报材料大纲：")
+                _safe_multi_cell(pdf, f"申报可行性：{outline.get('applicability', '')}")
+                _safe_multi_cell(pdf, "申报材料大纲：")
                 for section in outline.get('outline', []):
-                    pdf.multi_cell(content_width, 5, '  - ' + section.get('section', '') + '：' + '; '.join(section.get('content', [])))
+                    _safe_multi_cell(pdf, '  - ' + section.get('section', '') + '：' + '; '.join(section.get('content', [])))
                 if outline.get('key_attachments'):
-                    pdf.multi_cell(content_width, 5, "关键附件清单：")
+                    _safe_multi_cell(pdf, "关键附件清单：")
                     for item in outline['key_attachments']:
-                        pdf.multi_cell(content_width, 5, '  - ' + item)
+                        _safe_multi_cell(pdf, '  - ' + item)
                 if outline.get('gap_fill_plan'):
-                    pdf.multi_cell(content_width, 5, "差距补齐计划：")
+                    _safe_multi_cell(pdf, "差距补齐计划：")
                     for item in outline['gap_fill_plan']:
-                        pdf.multi_cell(content_width, 5, '  - ' + item)
+                        _safe_multi_cell(pdf, '  - ' + item)
                 if outline.get('notes'):
-                    pdf.multi_cell(content_width, 5, f"特别提醒：{outline['notes']}")
+                    _safe_multi_cell(pdf, f"特别提醒：{outline['notes']}")
 
             pdf.ln(2)
 
@@ -1332,7 +1339,7 @@ def build_pdf_report(
         pdf.cell(0, 8, title, ln=True)
         pdf.set_font("cn", "", 10)
         for item in items:
-            pdf.multi_cell(content_width, 5, '- ' + item)
+            _safe_multi_cell(pdf, '- ' + item)
         pdf.ln(2)
 
     # 页脚
