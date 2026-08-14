@@ -130,6 +130,7 @@ def _safe_multi_cell(pdf, text, line_height=5):
     pdf.set_xy(pdf.l_margin, pdf.get_y())
     content_width = pdf.w - pdf.l_margin - pdf.r_margin
     pdf.multi_cell(content_width, line_height, str(text))
+    pdf.set_x(pdf.l_margin)  # multi_cell 后 x 可能停在右侧，强制归位
 
 
 def _avg_combined_score(results: List[Dict[str, Any]]) -> float:
