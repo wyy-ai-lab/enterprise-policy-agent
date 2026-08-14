@@ -1170,16 +1170,16 @@ def build_pdf_report(
             pdf.set_font("cn", "B", 12)
             pdf.cell(0, 8, f"{p['rank']}. {p['policy_name']}", ln=True)
             pdf.set_font("cn", "", 10)
-            _safe_multi_cell(pdf, f"诊断结果：{p['diagnosis']}")
-            _safe_multi_cell(pdf, f"综合分数：{p['combined_score']} 分")
-            _safe_multi_cell(pdf, f"政策优先级：{p['priority']}")
+            pdf.cell(0, 5, f"诊断结果：{p['diagnosis']}", ln=True)
+            pdf.cell(0, 5, f"综合分数：{p['combined_score']} 分", ln=True)
+            pdf.cell(0, 5, f"政策优先级：{p['priority']}", ln=True)
             _safe_multi_cell(pdf, f"申报时间线：{p['timeline_advice']}")
             if p['deadline']:
                 status = p['deadline_status']
-                _safe_multi_cell(pdf, f"截止日：{p['deadline']}（{status['status_text']}）")
+                pdf.cell(0, 5, f"截止日：{p['deadline']}（{status['status_text']}）", ln=True)
             _safe_multi_cell(pdf, f"扶持内容：{p['benefit']}")
             if p['key_gaps']:
-                _safe_multi_cell(pdf, f"关键差距：{'、'.join(p['key_gaps'])}")
+                pdf.cell(0, 5, f"关键差距：{'、'.join(p['key_gaps'])}", ln=True)
             pdf.ln(2)
     else:
         _safe_multi_cell(pdf, "暂无推荐政策。")
