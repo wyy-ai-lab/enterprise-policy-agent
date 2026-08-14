@@ -127,7 +127,7 @@ def _table_row(pdf, cells, col_widths, line_height, aligns=None, fills=None, fon
 
 def _safe_multi_cell(pdf, text, line_height=5):
     """重置 x 到左边距后渲染多行文本，避免文字漂到右侧"""
-    pdf.set_x(pdf.l_margin)
+    pdf.set_xy(pdf.l_margin, pdf.get_y())
     content_width = pdf.w - pdf.l_margin - pdf.r_margin
     pdf.multi_cell(content_width, line_height, str(text))
 
