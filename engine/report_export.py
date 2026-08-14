@@ -87,6 +87,44 @@ def _hex_to_rgb(hex_color: str) -> Tuple[int, int, int]:
     return tuple(int(hex_color[i:i + 2], 16) for i in (0, 2, 4))
 
 
+def _table_row(pdf, cells, col_widths, line_height, aligns=None, fills=None, font_size=None):
+    """渲染一行可自动换行的表格，返回实际占用高度"""
+    if aligns is None:
+        aligns = ['L'] * len(cells)
+    if fills is None:
+        fills = [None] * len(cells)
+
+    x_start = pdf.get_x()
+    y_start = pdf.get_y()
+
+    # 计算每个单元格需要的高度
+    heights = []
+    for text, width in zip(cells, col_widths):
+        try:
+            lines = pdf.multi_cell(width, line_height, str(text), split_only=True)
+            heights.append(len(lines) * line_height)
+        except Exception:
+            heights.append(line_height)
+    row_height = max(heights + [line_height])
+
+    # 渲染每个单元格
+    for i, (text, width, align, fill) in enumerate(zip(cells, col_widths, aligns, fills)):
+        pdf.set_xy(x_start + sum(col_widths[:i]), y_start)
+        if font_size:
+            pdf.set_font_size(font_size)
+        if fill:
+            pdf.set_fill_color(*fill)
+            pdf.set_text_color(255, 255, 255)
+            pdf.multi_cell(width, line_height, str(text), border=1, align=align, fill=True)
+            pdf.set_text_color(0, 0, 0)
+        else:
+            pdf.multi_cell(width, line_height, str(text), border=1, align=align)
+
+    # 移动到下一行起点
+    pdf.set_xy(x_start, y_start + row_height)
+    return row_height
+
+
 def _avg_combined_score(results: List[Dict[str, Any]]) -> float:
     """计算平均综合匹配度"""
     scores = [r.get('combined_score', r.get('match_score', 0)) for r in results]
@@ -987,6 +1025,8 @@ def build_pdf_report(
         if not stripped:
             pdf.ln(2)
             continue
+        # 确保每行都从左边距开始，避免文字漂到右侧
+        pdf.set_x(pdf.l_margin)
         if stripped.startswith('### '):
             pdf.set_font("cn", "B", 13)
             pdf.cell(0, 8, stripped[4:], ln=True)
@@ -1028,16 +1068,13 @@ def build_pdf_report(
             ('研发准备金制度', '已建立' if ep['rd_accounting_system'] else '未建立'),
             ('近三年重大事故', '有' if ep['has_major_accident'] else '无'),
         ]
-        col_widths = [60, 100]
-        pdf.set_font("cn", "B", 10)
-        pdf.cell(col_widths[0], 7, '项目', border=1, align='C')
-        pdf.cell(col_widths[1], 7, '内容', border=1, align='C')
-        pdf.ln()
-        pdf.set_font("cn", "", 10)
+        col_widths = [55, 110]
+        line_height = 6
+        pdf.set_font("cn", "B", 9)
+        _table_row(pdf, ['项目', '内容'], col_widths, line_height, aligns=['C', 'C'])
+        pdf.set_font("cn", "", 9)
         for label, value in profile_rows:
-            pdf.cell(col_widths[0], 7, label, border=1)
-            pdf.cell(col_widths[1], 7, value, border=1)
-            pdf.ln()
+            _table_row(pdf, [label, value], col_widths, line_height)
     else:
         pdf.multi_cell(content_width, 5, ep['text'])
 
@@ -1047,21 +1084,22 @@ def build_pdf_report(
     pdf.cell(0, 10, "诊断结果总览", ln=True)
     pdf.ln(2)
 
-    col_widths = [80, 60]
-    pdf.set_font("cn", "B", 10)
-    pdf.cell(col_widths[0], 7, '诊断结果', border=1, align='C')
-    pdf.cell(col_widths[1], 7, '数量', border=1, align='C')
-    pdf.ln()
+    col_widths = [75, 55]
+    line_height = 6
+    pdf.set_font("cn", "B", 9)
+    _table_row(pdf, ['诊断结果', '数量'], col_widths, line_height, aligns=['C', 'C'])
 
-    pdf.set_font("cn", "", 10)
+    pdf.set_font("cn", "", 9)
     for diagnosis in ["立即申报", "培育申报", "持续关注", "暂不适合"]:
-        rgb = DIAGNOSIS_COLORS[diagnosis]['rgb']
-        pdf.set_fill_color(*rgb)
-        pdf.set_text_color(255, 255, 255)
-        pdf.cell(col_widths[0], 7, diagnosis, border=1, align='C', fill=True)
-        pdf.set_text_color(0, 0, 0)
-        pdf.cell(col_widths[1], 7, f"{sections['summary_counts'].get(diagnosis, 0)} 条", border=1, align='C')
-        pdf.ln()
+        fill = DIAGNOSIS_COLORS[diagnosis]['rgb']
+        _table_row(
+            pdf,
+            [diagnosis, f"{sections['summary_counts'].get(diagnosis, 0)} 条"],
+            col_widths,
+            line_height,
+            aligns=['C', 'C'],
+            fills=[fill, fill]
+        )
 
     pdf.ln(3)
     pdf.set_font("cn", "", 10)
@@ -1080,16 +1118,13 @@ def build_pdf_report(
 
     pdf.set_font("cn", "", 10)
     if sections['gap_analysis']:
-        col_widths = [80, 60]
-        pdf.set_font("cn", "B", 10)
-        pdf.cell(col_widths[0], 7, '差距/缺失项', border=1, align='C')
-        pdf.cell(col_widths[1], 7, '涉及政策数', border=1, align='C')
-        pdf.ln()
-        pdf.set_font("cn", "", 10)
+        col_widths = [80, 50]
+        line_height = 6
+        pdf.set_font("cn", "B", 9)
+        _table_row(pdf, ['差距/缺失项', '涉及政策数'], col_widths, line_height, aligns=['C', 'C'])
+        pdf.set_font("cn", "", 9)
         for name, count in sections['gap_analysis']:
-            pdf.cell(col_widths[0], 7, name, border=1)
-            pdf.cell(col_widths[1], 7, f"{count} 条", border=1, align='C')
-            pdf.ln()
+            _table_row(pdf, [name, f"{count} 条"], col_widths, line_height, aligns=['L', 'C'])
     else:
         pdf.multi_cell(content_width, 5, "未发现显著高频差距项。")
 
@@ -1100,29 +1135,27 @@ def build_pdf_report(
     pdf.ln(2)
 
     if sections['top3_policies']:
-        # 表格
-        col_widths = [15, 55, 30, 25, 55]
-        row_height = 7
-        pdf.set_font("cn", "B", 10)
+        # 表格：总宽度 170，留 10mm 安全边距
+        col_widths = [12, 58, 26, 22, 52]
+        line_height = 5.5
         headers = ['排名', '政策名称', '诊断结果', '综合分数', '时间线建议']
-        for i, h in enumerate(headers):
-            pdf.cell(col_widths[i], row_height, h, border=1, align='C')
-        pdf.ln()
+        aligns = ['C', 'L', 'C', 'C', 'L']
 
-        pdf.set_font("cn", "", 9)
+        pdf.set_font("cn", "B", 9)
+        _table_row(pdf, headers, col_widths, line_height, aligns=aligns)
+
+        pdf.set_font("cn", "", 8.5)
         for p in sections['top3_policies']:
-            # 诊断结果单元格使用填充色
-            rgb = DIAGNOSIS_COLORS[p['diagnosis']]['rgb']
-            pdf.set_fill_color(*rgb)
-            pdf.set_text_color(255, 255, 255)
-
-            pdf.cell(col_widths[0], row_height, str(p['rank']), border=1, align='C')
-            pdf.cell(col_widths[1], row_height, p['policy_name'], border=1)
-            pdf.cell(col_widths[2], row_height, p['diagnosis'], border=1, align='C', fill=True)
-            pdf.set_text_color(0, 0, 0)
-            pdf.cell(col_widths[3], row_height, f"{p['combined_score']} 分", border=1, align='C')
-            pdf.cell(col_widths[4], row_height, p['timeline_advice'], border=1)
-            pdf.ln()
+            fill = DIAGNOSIS_COLORS[p['diagnosis']]['rgb']
+            cells = [
+                str(p['rank']),
+                p['policy_name'],
+                p['diagnosis'],
+                f"{p['combined_score']} 分",
+                p['timeline_advice'],
+            ]
+            fills = [None, None, fill, None, None]
+            _table_row(pdf, cells, col_widths, line_height, aligns=aligns, fills=fills)
 
         pdf.ln(5)
         pdf.set_font("cn", "", 10)
@@ -1158,17 +1191,13 @@ def build_pdf_report(
         pdf.multi_cell(content_width, 5, "（未安装 kaleido，以下用表格展示维度分数）")
         pdf.ln(2)
         col_widths = [60, 40, 40]
-        pdf.set_font("cn", "B", 10)
-        for i, h in enumerate(['能力维度', '分数', '评价']):
-            pdf.cell(col_widths[i], 7, h, border=1, align='C')
-        pdf.ln()
-        pdf.set_font("cn", "", 10)
+        line_height = 6
+        pdf.set_font("cn", "B", 9)
+        _table_row(pdf, ['能力维度', '分数', '评价'], col_widths, line_height, aligns=['C', 'C', 'C'])
+        pdf.set_font("cn", "", 9)
         for dim, score in sections['capability_scores'].items():
             level = "强" if score >= 80 else "良" if score >= 60 else "弱"
-            pdf.cell(col_widths[0], 7, dim, border=1)
-            pdf.cell(col_widths[1], 7, f"{score} 分", border=1, align='C')
-            pdf.cell(col_widths[2], 7, level, border=1, align='C')
-            pdf.ln()
+            _table_row(pdf, [dim, f"{score} 分", level], col_widths, line_height, aligns=['L', 'C', 'C'])
 
     pdf.ln(5)
     pdf.set_font("cn", "B", 12)
@@ -1183,21 +1212,22 @@ def build_pdf_report(
     pdf.cell(0, 10, "全部政策诊断明细", ln=True)
     pdf.ln(2)
 
-    col_widths = [80, 60]
-    pdf.set_font("cn", "B", 10)
-    pdf.cell(col_widths[0], 7, '诊断结果', border=1, align='C')
-    pdf.cell(col_widths[1], 7, '数量', border=1, align='C')
-    pdf.ln()
+    col_widths = [75, 55]
+    line_height = 6
+    pdf.set_font("cn", "B", 9)
+    _table_row(pdf, ['诊断结果', '数量'], col_widths, line_height, aligns=['C', 'C'])
 
-    pdf.set_font("cn", "", 10)
+    pdf.set_font("cn", "", 9)
     for diagnosis in ["立即申报", "培育申报", "持续关注", "暂不适合"]:
-        rgb = DIAGNOSIS_COLORS[diagnosis]['rgb']
-        pdf.set_fill_color(*rgb)
-        pdf.set_text_color(255, 255, 255)
-        pdf.cell(col_widths[0], 7, diagnosis, border=1, align='C', fill=True)
-        pdf.set_text_color(0, 0, 0)
-        pdf.cell(col_widths[1], 7, f"{sections['summary_counts'].get(diagnosis, 0)} 条", border=1, align='C')
-        pdf.ln()
+        fill = DIAGNOSIS_COLORS[diagnosis]['rgb']
+        _table_row(
+            pdf,
+            [diagnosis, f"{sections['summary_counts'].get(diagnosis, 0)} 条"],
+            col_widths,
+            line_height,
+            aligns=['C', 'C'],
+            fills=[fill, fill]
+        )
 
     pdf.ln(3)
     pdf.set_font("cn", "", 10)
