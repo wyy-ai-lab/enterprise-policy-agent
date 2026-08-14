@@ -6,6 +6,8 @@
 from datetime import datetime
 from typing import Dict, List, Any, Tuple, Optional
 
+from .matcher import label_for
+
 
 # 诊断类型优先级（数字越小越优先）
 DIAGNOSIS_PRIORITY = {
@@ -170,11 +172,13 @@ def get_top_gaps(results: List[Dict[str, Any]], top_n: int = 5) -> List[Tuple[st
     gap_counter = {}
     for r in results:
         for item in r.get('failed', []):
-            # 提取条件名（冒号前）
+            # 提取条件名（冒号前）并转换中文标签
             key = item.split('：')[0] if '：' in item else item.split(':')[0]
+            key = label_for(key)
             gap_counter[key] = gap_counter.get(key, 0) + 1
         for item in r.get('unknown', []):
             key = item.split('：')[0] if '：' in item else item.split(':')[0]
+            key = label_for(key)
             gap_counter[key] = gap_counter.get(key, 0) + 1
 
     return sorted(gap_counter.items(), key=lambda x: -x[1])[:top_n]

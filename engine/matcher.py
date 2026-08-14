@@ -14,6 +14,60 @@ def load_json(file_path: str) -> Dict[str, Any]:
         return json.load(f)
 
 
+# 企业画像字段 → 中文可读名称
+FIELD_LABELS = {
+    "name": "企业名称",
+    "province": "省份",
+    "city": "城市",
+    "region": "所在地区",
+    "industry": "所属行业",
+    "sub_industry": "细分行业",
+    "scale": "企业规模",
+    "employees": "员工人数",
+    "founded_year": "成立年份",
+    "years_in_operation": "成立年限",
+    "years_in_segment": "细分领域从业年限",
+    "revenue": "上年度营收",
+    "profit": "上年度利润",
+    "revenue_growth_2yr": "近两年营收增长率",
+    "total_assets": "资产总额",
+    "rd_investment": "研发投入",
+    "rd_ratio": "研发投入占比",
+    "rd_team_size": "研发人员数量",
+    "rd_team_ratio": "研发人员占比",
+    "rd_equipment": "研发设备",
+    "rd_investment_growth": "研发投入增长率",
+    "rd_accounting_system": "研发准备金制度",
+    "invention_patents": "发明专利数量",
+    "utility_models": "实用新型专利数量",
+    "software_copyrights": "软件著作权数量",
+    "trademarks": "商标数量",
+    "qualifications": "企业资质",
+    "is_high_tech_enterprise": "国家高新技术企业",
+    "is_high_tech_field": "高新技术领域",
+    "high_tech_income_ratio": "高新技术产品收入占比",
+    "has_major_accident": "近三年重大事故",
+    "market_share_proof": "市场占有率证明",
+    "project_completion": "项目完成情况",
+    "is_first_application": "首次申报",
+    "has_sales_contract": "销售合同",
+    "has_test_report": "检测报告",
+    "has_mes": "MES系统",
+    "has_mes_erp": "MES/ERP系统",
+    "equipment_networking_rate": "设备联网率",
+    "smart_equipment_investment": "智能化设备投资",
+    "self_funding_ratio": "自筹资金比例",
+    "team_core_members": "核心团队成员",
+    "total_project_investment": "项目总投资",
+    "core_product": "核心产品",
+}
+
+
+def label_for(field_name: str) -> str:
+    """获取字段的中文名称，没有映射时返回原值"""
+    return FIELD_LABELS.get(field_name, field_name)
+
+
 def save_json(file_path: str, data: Dict[str, Any]) -> None:
     """保存 JSON 文件"""
     with open(file_path, 'w', encoding='utf-8') as f:
@@ -22,24 +76,25 @@ def save_json(file_path: str, data: Dict[str, Any]) -> None:
 
 def check_condition(value: Any, condition: Dict[str, Any], condition_name: str) -> Tuple[bool, str]:
     """检查单个条件是否满足"""
+    label = label_for(condition_name)
     if value is None:
-        return False, f"{condition_name}: 数据缺失，需补充"
+        return False, f"{label}：数据缺失，需补充"
 
     if 'min' in condition:
         if value < condition['min']:
             gap = condition['min'] - value
-            return False, f"{condition_name}: 当前 {value}，要求 ≥ {condition['min']}，差 {gap:.2f}"
+            return False, f"{label}：当前 {value}，要求 ≥ {condition['min']}，差 {gap:.2f}"
 
     if 'max' in condition:
         if value > condition['max']:
             gap = value - condition['max']
-            return False, f"{condition_name}: 当前 {value}，要求 ≤ {condition['max']}，超出 {gap:.2f}"
+            return False, f"{label}：当前 {value}，要求 ≤ {condition['max']}，超出 {gap:.2f}"
 
     if 'required' in condition:
         required = condition['required']
         if bool(value) != required:
             status = "需要" if required else "不需要"
-            return False, f"{condition_name}: 当前 {value}，要求{status}满足"
+            return False, f"{label}：当前 {value}，要求{status}满足"
 
     if 'contains' in condition:
         required_items = condition['contains']
@@ -47,14 +102,14 @@ def check_condition(value: Any, condition: Dict[str, Any], condition_name: str) 
             value = [value]
         missing = [item for item in required_items if item not in value]
         if missing:
-            return False, f"{condition_name}: 缺少资质 {missing}"
+            return False, f"{label}：缺少资质 {missing}"
 
     if 'in' in condition:
         allowed = condition['in']
         if value not in allowed:
-            return False, f"{condition_name}: 当前 {value}，不在允许范围 {allowed} 内"
+            return False, f"{label}：当前 {value}，不在允许范围 {allowed} 内"
 
-    return True, f"{condition_name}: 满足"
+    return True, f"{label}：满足"
 
 
 def match_policy(enterprise: Dict[str, Any], policy: Dict[str, Any]) -> Dict[str, Any]:

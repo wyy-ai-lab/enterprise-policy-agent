@@ -11,6 +11,7 @@ from datetime import datetime
 from typing import Dict, Any, List, Optional, Tuple
 
 from .dashboard import get_deadline_status, get_top_gaps, compute_dashboard_metrics
+from .matcher import label_for
 from .radar_chart import calculate_dimension_scores
 
 
@@ -175,9 +176,13 @@ def select_top3_policies(results: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
 
         key_gaps = []
         if r.get('failed'):
-            key_gaps.extend([item.split('：')[0] if '：' in item else item.split(':')[0] for item in r['failed'][:3]])
+            for item in r['failed'][:3]:
+                key = item.split('：')[0] if '：' in item else item.split(':')[0]
+                key_gaps.append(label_for(key))
         if r.get('unknown'):
-            key_gaps.extend([item.split('：')[0] if '：' in item else item.split(':')[0] for item in r['unknown'][:2]])
+            for item in r['unknown'][:2]:
+                key = item.split('：')[0] if '：' in item else item.split(':')[0]
+                key_gaps.append(label_for(key))
         key_gaps = list(dict.fromkeys(key_gaps))[:3]  # 去重并限制数量
 
         selected.append({
