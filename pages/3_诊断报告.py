@@ -12,6 +12,9 @@ from engine.report_export import (
     build_markdown_report,
     build_word_report,
     build_pdf_report,
+    build_roadmap_word_report,
+    build_roadmap_pdf_report,
+    build_roadmap_html_report,
     build_report_sections,
     select_top3_policies,
 )
@@ -742,14 +745,44 @@ with tab_roadmap:
         st.divider()
         st.markdown('<div class="section-title">📥 导出培育路线图</div>', unsafe_allow_html=True)
         roadmap_md = st.session_state.get('roadmap_markdown', build_roadmap_markdown(roadmap))
-        st.download_button(
-            label="下载培育路线图 (.md)",
-            data=roadmap_md,
-            file_name=f"{date_prefix}_{enterprise_name}_培育路线图.md",
-            mime="text/markdown",
-            use_container_width=True,
-            key="download_roadmap"
-        )
+        c_md, c_docx = st.columns(2)
+        c_pdf, c_html = st.columns(2)
+        with c_md:
+            st.download_button(
+                label="Markdown (.md)",
+                data=roadmap_md,
+                file_name=f"{date_prefix}_{enterprise_name}_培育路线图.md",
+                mime="text/markdown",
+                use_container_width=True,
+                key="download_roadmap_md"
+            )
+        with c_docx:
+            st.download_button(
+                label="Word (.docx)",
+                data=build_roadmap_word_report(roadmap),
+                file_name=f"{date_prefix}_{enterprise_name}_培育路线图.docx",
+                mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+                use_container_width=True,
+                key="download_roadmap_docx"
+            )
+        with c_pdf:
+            st.download_button(
+                label="PDF (.pdf)",
+                data=build_roadmap_pdf_report(roadmap),
+                file_name=f"{date_prefix}_{enterprise_name}_培育路线图.pdf",
+                mime="application/pdf",
+                use_container_width=True,
+                key="download_roadmap_pdf"
+            )
+        with c_html:
+            st.download_button(
+                label="HTML (.html)",
+                data=build_roadmap_html_report(roadmap),
+                file_name=f"{date_prefix}_{enterprise_name}_培育路线图.html",
+                mime="text/html",
+                use_container_width=True,
+                key="download_roadmap_html"
+            )
     else:
         st.info("👆 点击「生成路线图」按钮，系统将根据诊断结果自动生成培育建议。")
 

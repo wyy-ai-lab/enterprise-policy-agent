@@ -1880,3 +1880,183 @@ def build_html_report(
 """
     return html
 
+
+def build_roadmap_word_report(roadmap: Dict[str, Any]) -> bytes:
+    """生成培育路线图 Word 文档，返回 bytes"""
+    from docx import Document
+    from docx.shared import Pt, RGBColor
+    from docx.enum.text import WD_PARAGRAPH_ALIGNMENT
+
+    doc = Document()
+
+    title = doc.add_heading(f"{roadmap.get('enterprise_name', '企业')} 政策培育路线图", level=0)
+    title.alignment = WD_PARAGRAPH_ALIGNMENT.CENTER
+
+    summary = roadmap.get('summary', {})
+    doc.add_paragraph(f"生成时间：{roadmap.get('generated_at', '')}")
+    doc.add_paragraph(f"覆盖政策数：{summary.get('target_policies', 0)} 条")
+    doc.add_paragraph(f"培育动作总数：{summary.get('total_actions', 0)} 项")
+    if roadmap.get('llm_enhanced'):
+        doc.add_paragraph(f"生成方式：{roadmap.get('llm_provider', 'LLM')} 增强生成")
+    doc.add_paragraph()
+
+    phased = roadmap.get('phased_actions', {})
+    for phase in PHASE_ORDER:
+        actions = phased.get(phase, [])
+        if not actions:
+            continue
+        doc.add_heading(f"{PHASE_LABELS[phase]}（{len(actions)} 项）", level=1)
+        for i, action in enumerate(actions, 1):
+            doc.add_heading(f"{i}. {action.get('title', '')}", level=2)
+            doc.add_paragraph(f"说明：{action.get('description', '')}")
+            doc.add_paragraph(f"负责方：{action.get('owner', '')}")
+            doc.add_paragraph(f"难度：{action.get('difficulty', '')}")
+            doc.add_paragraph(f"预计耗时：{action.get('estimated_time', '')}")
+            doc.add_paragraph(f"预计费用：{action.get('estimated_cost', '')}")
+            related = action.get('related_policies', [])
+            if related:
+                doc.add_paragraph(f"关联政策：{'、'.join(related)}")
+            doc.add_paragraph()
+
+    footer = doc.add_paragraph("本路线图由企业政策诊断辅导智能体自动生成")
+    footer.alignment = WD_PARAGRAPH_ALIGNMENT.CENTER
+    footer.runs[0].font.size = Pt(9)
+    footer.runs[0].font.color.rgb = RGBColor(107, 114, 128)
+
+    buffer = io.BytesIO()
+    doc.save(buffer)
+    return buffer.getvalue()
+
+
+def build_roadmap_pdf_report(roadmap: Dict[str, Any]) -> bytes:
+    """生成培育路线图 PDF，返回 bytes"""
+    from fpdf import FPDF
+
+    class RoadmapPDF(FPDF):
+        def header(self):
+            self.set_font('cn', 'B', 16)
+            self.cell(0, 10, f"{roadmap.get('enterprise_name', '企业')} 政策培育路线图", ln=True, align='C')
+            self.ln(2)
+
+        def footer(self):
+            self.set_y(-15)
+            self.set_font('cn', '', 8)
+            self.set_text_color(128, 128, 128)
+            self.cell(0, 10, f"第 {self.page_no()} 页", align='C')
+
+    pdf = RoadmapPDF()
+    font_path = _find_cjk_font()
+    if font_path:
+        pdf.add_font('cn', '', font_path, uni=True)
+        pdf.add_font('cn', 'B', font_path, uni=True)
+    pdf.set_auto_page_break(auto=True, margin=15)
+    pdf.add_page()
+
+    summary = roadmap.get('summary', {})
+    pdf.set_font('cn', '', 10)
+    _safe_multi_cell(pdf, f"生成时间：{roadmap.get('generated_at', '')}")
+    _safe_multi_cell(pdf, f"覆盖政策数：{summary.get('target_policies', 0)} 条")
+    _safe_multi_cell(pdf, f"培育动作总数：{summary.get('total_actions', 0)} 项")
+    if roadmap.get('llm_enhanced'):
+        _safe_multi_cell(pdf, f"生成方式：{roadmap.get('llm_provider', 'LLM')} 增强生成")
+    pdf.ln(4)
+
+    phased = roadmap.get('phased_actions', {})
+    for phase in PHASE_ORDER:
+        actions = phased.get(phase, [])
+        if not actions:
+            continue
+        pdf.set_font('cn', 'B', 14)
+        _safe_multi_cell(pdf, f"{PHASE_LABELS[phase]}（{len(actions)} 项）")
+        pdf.ln(1)
+        for i, action in enumerate(actions, 1):
+            pdf.set_font('cn', 'B', 11)
+            _safe_multi_cell(pdf, f"{i}. {action.get('title', '')}")
+            pdf.set_font('cn', '', 10)
+            _safe_multi_cell(pdf, f"说明：{action.get('description', '')}")
+            _safe_multi_cell(pdf, f"负责方：{action.get('owner', '')}  |  难度：{action.get('difficulty', '')}")
+            _safe_multi_cell(pdf, f"预计耗时：{action.get('estimated_time', '')}  |  预计费用：{action.get('estimated_cost', '')}")
+            related = action.get('related_policies', [])
+            if related:
+                _safe_multi_cell(pdf, f"关联政策：{'、'.join(related)}")
+            pdf.ln(3)
+
+    return bytes(pdf.output(dest="S"))
+
+
+def build_roadmap_html_report(roadmap: Dict[str, Any]) -> str:
+    """生成独立培育路线图 HTML 页面，返回字符串"""
+    summary = roadmap.get('summary', {})
+    mode_text = f"{roadmap.get('llm_provider', 'LLM')} 增强生成" if roadmap.get('llm_enhanced') else "规则生成"
+
+    action_cards = []
+    phased = roadmap.get('phased_actions', {})
+    for phase in PHASE_ORDER:
+        actions = phased.get(phase, [])
+        if not actions:
+            continue
+        items_html = "\n".join(
+            f"""
+            <div class='action-item'>
+              <div class='action-title'>{i}. {action.get('title', '')}</div>
+              <div class='action-meta'>负责方：{action.get('owner', '')}  |  难度：{action.get('difficulty', '')}  |  预计：{action.get('estimated_time', '')} / {action.get('estimated_cost', '')}</div>
+              <p>{action.get('description', '')}</p>
+              {'<div class=\"related\">关联政策：' + '、'.join(action.get('related_policies', [])) + '</div>' if action.get('related_policies') else ''}
+            </div>"""
+            for i, action in enumerate(actions, 1)
+        )
+        action_cards.append(
+            f"""
+            <div class='phase-card'>
+              <h2>{PHASE_LABELS[phase]}（{len(actions)} 项）</h2>
+              {items_html}
+            </div>"""
+        )
+
+    html = f"""<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>{roadmap.get('enterprise_name', '企业')} 政策培育路线图</title>
+  <style>
+    :root {{ --bg: #f5f5f7; --card: #ffffff; --text: #1d1d1f; --muted: #6e6e73; --border: rgba(0,0,0,0.08); --blue: #0071e3; --blue-light: rgba(0,113,227,0.12); --green: #34c759; --green-light: rgba(52,199,89,0.12); --orange: #ff9500; --orange-light: rgba(255,149,0,0.12); --red: #ff3b30; --red-light: rgba(255,59,48,0.12); }}
+    body {{ font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif; background: var(--bg); color: var(--text); line-height: 1.6; margin: 0; padding: 2rem 1rem; }}
+    .container {{ max-width: 800px; margin: 0 auto; }}
+    .header {{ text-align: center; margin-bottom: 2rem; }}
+    .header h1 {{ font-size: 1.8rem; margin: 0 0 0.5rem; letter-spacing: -0.02em; }}
+    .header .meta {{ color: var(--muted); font-size: 0.95rem; }}
+    .metrics {{ display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 1rem; margin-bottom: 1.5rem; }}
+    .metric {{ background: var(--card); border: 1px solid var(--border); border-radius: 16px; padding: 1rem; text-align: center; box-shadow: 0 2px 8px rgba(0,0,0,0.04); }}
+    .metric .value {{ font-size: 1.5rem; font-weight: 700; }}
+    .metric .label {{ font-size: 0.85rem; color: var(--muted); }}
+    .phase-card {{ background: var(--card); border: 1px solid var(--border); border-radius: 20px; padding: 1.5rem; margin-bottom: 1.25rem; box-shadow: 0 2px 8px rgba(0,0,0,0.04); }}
+    .phase-card h2 {{ font-size: 1.15rem; margin: 0 0 1rem; padding-bottom: 0.65rem; border-bottom: 1px solid var(--border); }}
+    .action-item {{ padding: 0.9rem 0; border-bottom: 1px solid var(--border); }}
+    .action-item:last-child {{ border-bottom: none; }}
+    .action-title {{ font-weight: 700; font-size: 1.05rem; margin-bottom: 0.35rem; }}
+    .action-meta {{ color: var(--muted); font-size: 0.85rem; margin-bottom: 0.5rem; }}
+    .related {{ color: var(--blue); font-size: 0.85rem; margin-top: 0.5rem; }}
+    .footer {{ text-align: center; color: var(--muted); font-size: 0.85rem; margin-top: 2rem; }}
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="header">
+      <h1>🌱 企业政策培育路线图</h1>
+      <div class="meta"><strong>{roadmap.get('enterprise_name', '企业')}</strong> · 生成时间：{roadmap.get('generated_at', '')} · 生成方式：{mode_text}</div>
+    </div>
+
+    <div class="metrics">
+      <div class="metric"><div class="value">{summary.get('target_policies', 0)}</div><div class="label">覆盖政策数（条）</div></div>
+      <div class="metric"><div class="value">{summary.get('total_actions', 0)}</div><div class="label">培育动作总数（项）</div></div>
+    </div>
+
+    {''.join(action_cards)}
+
+    <div class="footer">本路线图由企业政策诊断辅导智能体自动生成</div>
+  </div>
+</body>
+</html>"""
+    return html
+
