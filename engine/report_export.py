@@ -242,11 +242,11 @@ def build_executive_summary(
     top_gaps = get_top_gaps(results, top_n=3)
 
     lines = []
-    lines.append(f"本报告针对 **{enterprise_name}** 的政策申报机会进行了{mode_text}，共匹配 {total} 条政策。")
-    lines.append(f"整体平均综合匹配度为 **{avg_score} 分**，其中：")
+    lines.append(f"本报告针对 {enterprise_name} 的政策申报机会进行了{mode_text}，共匹配 {total} 条政策。")
+    lines.append(f"整体平均综合匹配度为 {avg_score} 分，其中：")
     lines.append(
-        f"- 立即申报 **{summary.get('立即申报', 0)}** 条、培育申报 **{summary.get('培育申报', 0)}** 条、"
-        f"持续关注 **{summary.get('持续关注', 0)}** 条、暂不适合 **{summary.get('暂不适合', 0)}** 条。"
+        f"- 立即申报 {summary.get('立即申报', 0)} 条、培育申报 {summary.get('培育申报', 0)} 条、"
+        f"持续关注 {summary.get('持续关注', 0)} 条、暂不适合 {summary.get('暂不适合', 0)} 条。"
     )
     lines.append("")
     lines.append("### 核心发现")
