@@ -11,8 +11,9 @@ from datetime import datetime
 from typing import Dict, Any, List, Optional, Tuple
 
 from .dashboard import get_deadline_status, get_top_gaps, compute_dashboard_metrics
-from .matcher import label_for
+from .matcher import label_for, humanize_gap_item
 from .radar_chart import calculate_dimension_scores
+from .cultivation_roadmap import load_roadmap, build_roadmap_markdown, PHASE_LABELS, PHASE_ORDER
 
 
 # 诊断类型展示颜色（Word/PDF 复用）
@@ -177,12 +178,10 @@ def select_top3_policies(results: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
         key_gaps = []
         if r.get('failed'):
             for item in r['failed'][:3]:
-                key = item.split('：')[0] if '：' in item else item.split(':')[0]
-                key_gaps.append(label_for(key))
+                key_gaps.append(humanize_gap_item(item).split('：')[0] if '：' in humanize_gap_item(item) else humanize_gap_item(item).split(':')[0])
         if r.get('unknown'):
             for item in r['unknown'][:2]:
-                key = item.split('：')[0] if '：' in item else item.split(':')[0]
-                key_gaps.append(label_for(key))
+                key_gaps.append(humanize_gap_item(item).split('：')[0] if '：' in humanize_gap_item(item) else humanize_gap_item(item).split(':')[0])
         key_gaps = list(dict.fromkeys(key_gaps))[:3]  # 去重并限制数量
 
         selected.append({
@@ -376,6 +375,19 @@ def build_report_sections(result: Dict[str, Any], capability_scores: Dict[str, i
     gap_analysis = get_top_gaps(results, top_n=5)
     enterprise_profile = _build_enterprise_profile(enterprise)
 
+    # 尝试加载已生成的培育路线图
+    roadmap = load_roadmap("output/cultivation_roadmap.json")
+    roadmap_summary = None
+    if roadmap:
+        roadmap_summary = {
+            "target_policies": roadmap.get("summary", {}).get("target_policies", 0),
+            "total_actions": roadmap.get("summary", {}).get("total_actions", 0),
+            "phase_counts": roadmap.get("summary", {}).get("phase_counts", {}),
+            "llm_enhanced": roadmap.get("llm_enhanced", False),
+            "llm_provider": roadmap.get("llm_provider", ""),
+            "markdown": build_roadmap_markdown(roadmap),
+        }
+
     return {
         "title": "企业政策诊断报告",
         "enterprise_name": enterprise_name,
@@ -396,6 +408,7 @@ def build_report_sections(result: Dict[str, Any], capability_scores: Dict[str, i
         "detailed_results": results,
         "is_enhanced": is_enhanced,
         "next_steps": _build_next_steps(results),
+        "roadmap_summary": roadmap_summary,
     }
 
 
@@ -564,6 +577,29 @@ def build_markdown_report(result: Dict[str, Any]) -> str:
     for item in sections['capability_assessment']:
         report += f"- {item}\n"
 
+    # 培育路线图（如已生成）
+    if sections.get('roadmap_summary'):
+        rs = sections['roadmap_summary']
+        report += """
+
+## 个性化培育路线图
+
+"""
+        report += f"**目标政策数**：{rs['target_policies']} 条  \n"
+        report += f"**培育动作总数**：{rs['total_actions']} 项  \n"
+        if rs.get('llm_enhanced'):
+            report += f"**生成方式**：{rs.get('llm_provider', 'LLM')} 增强生成  \n"
+        else:
+            report += "**生成方式**：规则生成  \n"
+        report += "\n"
+
+        # 提取阶段统计
+        for phase in PHASE_ORDER:
+            count = rs.get('phase_counts', {}).get(phase, 0)
+            report += f"- {PHASE_LABELS[phase]}：{count} 项\n"
+
+        report += "\n详细培育路线图请见独立文件《企业培育路线图.md》。\n"
+
     report += """
 
 ## 全部政策诊断明细
@@ -603,12 +639,12 @@ def build_markdown_report(result: Dict[str, Any]) -> str:
             if r['failed']:
                 report += "- **差距**：\n"
                 for item in r['failed']:
-                    report += f"  - {item}\n"
+                    report += f"  - {humanize_gap_item(item)}\n"
 
             if r['unknown']:
                 report += "- **需补充数据**：\n"
                 for item in r['unknown']:
-                    report += f"  - {item}\n"
+                    report += f"  - {humanize_gap_item(item)}\n"
 
             if sections['is_enhanced'] and r.get('soft_score') is not None:
                 report += f"- **LLM 软条件评估**：{r['soft_score']} 分（置信度：{r.get('confidence', '未知')}）\n"
@@ -825,6 +861,33 @@ def build_word_report(
     for item in sections['capability_assessment']:
         doc.add_paragraph(item, style='List Bullet')
 
+    # ========== 培育路线图 ==========
+    if sections.get('roadmap_summary'):
+        rs = sections['roadmap_summary']
+        doc.add_heading('个性化培育路线图', level=1)
+        doc.add_paragraph(f"目标政策数：{rs['target_policies']} 条")
+        doc.add_paragraph(f"培育动作总数：{rs['total_actions']} 项")
+        if rs.get('llm_enhanced'):
+            doc.add_paragraph(f"生成方式：{rs.get('llm_provider', 'LLM')} 增强生成")
+        else:
+            doc.add_paragraph("生成方式：规则生成")
+
+        table = doc.add_table(rows=1, cols=2)
+        table.alignment = WD_TABLE_ALIGNMENT.CENTER
+        hdr = table.rows[0].cells
+        hdr[0].text = '阶段'
+        hdr[1].text = '动作数'
+        for cell in hdr:
+            cell.paragraphs[0].runs[0].font.bold = True
+
+        for phase in PHASE_ORDER:
+            count = rs.get('phase_counts', {}).get(phase, 0)
+            row = table.add_row().cells
+            row[0].text = PHASE_LABELS[phase]
+            row[1].text = f"{count} 项"
+
+        doc.add_paragraph('详细培育路线图请见独立文件《企业培育路线图.md》。')
+
     # ========== 诊断结果总览 ==========
     doc.add_heading('全部政策诊断明细', level=1)
     table = doc.add_table(rows=1, cols=2)
@@ -866,12 +929,12 @@ def build_word_report(
             if r['failed']:
                 doc.add_paragraph('差距：')
                 for item in r['failed']:
-                    doc.add_paragraph(item, style='List Bullet 2')
+                    doc.add_paragraph(humanize_gap_item(item), style='List Bullet 2')
 
             if r['unknown']:
                 doc.add_paragraph('需补充数据：')
                 for item in r['unknown']:
-                    doc.add_paragraph(item, style='List Bullet 2')
+                    doc.add_paragraph(humanize_gap_item(item), style='List Bullet 2')
 
             if sections['is_enhanced'] and r.get('soft_score') is not None:
                 doc.add_paragraph(f"LLM 软条件评估：{r['soft_score']} 分（置信度：{r.get('confidence', '未知')}）")
@@ -1219,6 +1282,35 @@ def build_pdf_report(
     for item in sections['capability_assessment']:
         _safe_multi_cell(pdf, '- ' + item)
 
+    # ========== 培育路线图 ==========
+    if sections.get('roadmap_summary'):
+        rs = sections['roadmap_summary']
+        pdf.add_page()
+        pdf.set_font("cn", "B", 16)
+        pdf.cell(0, 10, "个性化培育路线图", ln=True)
+        pdf.ln(2)
+
+        pdf.set_font("cn", "", 10)
+        _safe_multi_cell(pdf, f"目标政策数：{rs['target_policies']} 条")
+        _safe_multi_cell(pdf, f"培育动作总数：{rs['total_actions']} 项")
+        if rs.get('llm_enhanced'):
+            _safe_multi_cell(pdf, f"生成方式：{rs.get('llm_provider', 'LLM')} 增强生成")
+        else:
+            _safe_multi_cell(pdf, "生成方式：规则生成")
+        pdf.ln(3)
+
+        col_widths = [100, 40]
+        line_height = 6
+        pdf.set_font("cn", "B", 9)
+        _table_row(pdf, ['阶段', '动作数'], col_widths, line_height, aligns=['C', 'C'])
+        pdf.set_font("cn", "", 9)
+        for phase in PHASE_ORDER:
+            count = rs.get('phase_counts', {}).get(phase, 0)
+            _table_row(pdf, [PHASE_LABELS[phase], f"{count} 项"], col_widths, line_height, aligns=['L', 'C'])
+
+        pdf.ln(3)
+        _safe_multi_cell(pdf, "详细培育路线图请见独立文件《企业培育路线图.md》。")
+
     # ========== 全部政策诊断明细 ==========
     pdf.add_page()
     pdf.set_font("cn", "B", 16)
@@ -1284,12 +1376,12 @@ def build_pdf_report(
             if r['failed']:
                 _safe_multi_cell(pdf, "差距：")
                 for item in r['failed']:
-                    _safe_multi_cell(pdf, '  - ' + item)
+                    _safe_multi_cell(pdf, '  - ' + humanize_gap_item(item))
 
             if r['unknown']:
                 _safe_multi_cell(pdf, "需补充数据：")
                 for item in r['unknown']:
-                    _safe_multi_cell(pdf, '  - ' + item)
+                    _safe_multi_cell(pdf, '  - ' + humanize_gap_item(item))
 
             if sections['is_enhanced'] and r.get('soft_score') is not None:
                 _safe_multi_cell(pdf, f"LLM 软条件评估：{r['soft_score']} 分（置信度：{r.get('confidence', '未知')}）")
@@ -1525,6 +1617,28 @@ def build_html_report(
         ]
     )
 
+    # 培育路线图
+    roadmap_html = ""
+    if sections.get('roadmap_summary'):
+        rs = sections['roadmap_summary']
+        mode_text = f"{rs.get('llm_provider', 'LLM')} 增强生成" if rs.get('llm_enhanced') else "规则生成"
+        phase_rows = "\n".join(
+            f"        <tr><td>{PHASE_LABELS[phase]}</td><td>{rs.get('phase_counts', {}).get(phase, 0)} 项</td></tr>"
+            for phase in PHASE_ORDER
+        )
+        roadmap_html = f"""
+    <div class="card">
+      <h2>🌱 个性化培育路线图</h2>
+      <p><strong>目标政策数：</strong>{rs['target_policies']} 条 | <strong>培育动作总数：</strong>{rs['total_actions']} 项 | <strong>生成方式：</strong>{mode_text}</p>
+      <table>
+        <thead><tr><th>阶段</th><th>动作数</th></tr></thead>
+        <tbody>
+{phase_rows}
+        </tbody>
+      </table>
+      <p style="color: var(--muted); margin-top: 0.75rem;">详细培育路线图请见独立文件《企业培育路线图.md》。</p>
+    </div>"""
+
     nearest_deadline_html = ""
     if metrics['nearest_deadline']:
         nearest_deadline_html = f"      <li><strong>最近截止日：</strong>{metrics['nearest_deadline']}（剩 {metrics['nearest_days']} 天）</li>\n"
@@ -1749,6 +1863,8 @@ def build_html_report(
 {''.join(f'        <li>{item}</li>\n' for item in sections['capability_assessment'])}
       </ul>
     </div>
+
+    {roadmap_html}
 
     <div class="card">
       <h2>🚀 下一步行动建议</h2>

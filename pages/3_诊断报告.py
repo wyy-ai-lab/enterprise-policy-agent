@@ -6,6 +6,7 @@ from datetime import datetime
 
 # 添加引擎路径
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+from engine.matcher import humanize_gap_item
 from engine.report_export import (
     build_html_report,
     build_markdown_report,
@@ -13,6 +14,14 @@ from engine.report_export import (
     build_pdf_report,
     build_report_sections,
     select_top3_policies,
+)
+from engine.cultivation_roadmap import (
+    generate_enterprise_roadmap,
+    generate_enhanced_roadmap,
+    build_roadmap_markdown,
+    PHASE_LABELS,
+    PHASE_ORDER,
+    save_roadmap,
 )
 from engine.report_charts import (
     build_diagnosis_pie_chart,
@@ -206,6 +215,69 @@ st.markdown("""
     background: var(--apple-blue-light) !important;
     color: var(--apple-blue) !important;
 }
+
+/* 培育路线图样式 */
+.roadmap-phase-title {
+    font-size: 1.1rem;
+    font-weight: 700;
+    color: var(--apple-text);
+    margin: 1.25rem 0 0.75rem;
+    padding-bottom: 0.5rem;
+    border-bottom: 2px solid var(--apple-border);
+}
+.roadmap-action-card {
+    background: var(--apple-card-solid);
+    border: 1px solid var(--apple-border);
+    border-radius: var(--radius-md);
+    padding: 1rem 1.25rem;
+    margin-bottom: 0.75rem;
+    box-shadow: var(--shadow-sm);
+    border-left: 5px solid var(--apple-blue);
+    transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+.roadmap-action-card:hover {
+    transform: translateY(-2px);
+    box-shadow: var(--shadow-md);
+}
+.roadmap-action-card-phase-immediate { border-left-color: var(--apple-red); background: var(--apple-red-light); }
+.roadmap-action-card-phase-short { border-left-color: var(--apple-orange); background: var(--apple-orange-light); }
+.roadmap-action-card-phase-medium { border-left-color: var(--apple-blue); background: var(--apple-blue-light); }
+.roadmap-action-card-phase-long { border-left-color: var(--apple-green); background: var(--apple-green-light); }
+.roadmap-action-title {
+    font-size: 1rem;
+    font-weight: 700;
+    color: var(--apple-text);
+    margin-bottom: 0.35rem;
+}
+.roadmap-action-meta {
+    font-size: 0.8rem;
+    color: var(--apple-muted);
+    margin-bottom: 0.35rem;
+}
+.roadmap-action-desc {
+    font-size: 0.92rem;
+    color: var(--apple-text);
+    line-height: 1.5;
+    margin-bottom: 0.5rem;
+}
+.roadmap-action-tags {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.4rem;
+}
+.roadmap-tag {
+    display: inline-block;
+    padding: 0.2rem 0.6rem;
+    border-radius: var(--radius-pill);
+    font-size: 0.75rem;
+    font-weight: 500;
+    background: var(--apple-blue-light);
+    color: var(--apple-blue);
+}
+.roadmap-tag-owner { background: #f2f2f7; color: var(--apple-text); }
+.roadmap-tag-difficulty-low { background: rgba(52, 199, 89, 0.12); color: #1a6b2d; }
+.roadmap-tag-difficulty-medium { background: rgba(255, 149, 0, 0.12); color: #8a5a10; }
+.roadmap-tag-difficulty-high { background: rgba(255, 59, 48, 0.12); color: #8a1c15; }
 </style>
 """, unsafe_allow_html=True)
 
@@ -276,8 +348,8 @@ html_report = build_html_report(
 )
 
 
-# ========== 两大模块 Tab ==========
-tab_result, tab_markdown = st.tabs(["📊 诊断结果", "📝 完整报告预览（Markdown）"])
+# ========== 三大模块 Tab ==========
+tab_result, tab_roadmap, tab_markdown = st.tabs(["📊 诊断结果", "🌱 培育路线图", "📝 完整报告预览（Markdown）"])
 
 
 with tab_result:
@@ -466,12 +538,12 @@ with tab_result:
                     if r.get('failed'):
                         st.markdown("- **差距**：")
                         for item in r['failed']:
-                            st.markdown(f"  - {item}")
+                            st.markdown(f"  - {humanize_gap_item(item)}")
 
                     if r.get('unknown'):
                         st.markdown("- **需补充数据**：")
                         for item in r['unknown']:
-                            st.markdown(f"  - {item}")
+                            st.markdown(f"  - {humanize_gap_item(item)}")
 
                     if sections['is_enhanced'] and r.get('soft_score') is not None:
                         st.markdown(f"- **LLM 软条件评估**：{r['soft_score']} 分（置信度：{r.get('confidence', '未知')}）")
@@ -530,6 +602,156 @@ with tab_result:
                     <ul>{items_html}</ul>
                 </div>
                 """, unsafe_allow_html=True)
+
+
+with tab_roadmap:
+    # ---------- 培育路线图生成 ----------
+    with st.container(border=True):
+        st.markdown('<div class="section-title">🌱 个性化培育路线图</div>', unsafe_allow_html=True)
+        st.markdown("根据诊断结果中的差距项，生成按阶段、可执行的培育动作清单。")
+
+        roadmap_col1, roadmap_col2, roadmap_col3 = st.columns([2, 2, 1])
+        with roadmap_col1:
+            use_llm_roadmap = st.toggle(
+                "使用 LLM 增强（更具体）",
+                value=False,
+                key="roadmap_use_llm",
+                help="开启后会调用 LLM 生成更个性化的培育建议，需配置 API Key"
+            )
+        with roadmap_col2:
+            roadmap_top_n = st.slider(
+                "培育政策数量",
+                min_value=1,
+                max_value=8,
+                value=3,
+                key="roadmap_top_n",
+                help="对前 N 条培育申报/暂不适合政策生成路线图"
+            )
+        with roadmap_col3:
+            st.markdown("&nbsp;")
+            if st.button("生成路线图", type="primary", use_container_width=True, key="btn_generate_roadmap"):
+                with st.spinner("正在生成培育路线图..."):
+                    try:
+                        if use_llm_roadmap and (not api_key and not os.getenv("ANTHROPIC_API_KEY") and not os.getenv("OPENAI_API_KEY")):
+                            st.warning("未配置 API Key，将使用规则生成模式。请在侧边栏输入 Key 或配置 .env 文件。")
+                            use_llm_roadmap = False
+
+                        if use_llm_roadmap:
+                            roadmap = generate_enhanced_roadmap(
+                                enterprise=enterprise,
+                                diagnosis_result=result,
+                                provider=provider,
+                                api_key=api_key if api_key else None,
+                                use_demo=False,
+                                top_n=roadmap_top_n,
+                            )
+                        else:
+                            roadmap = generate_enterprise_roadmap(
+                                diagnosis_result=result,
+                                top_n=roadmap_top_n,
+                            )
+
+                        save_roadmap(roadmap)
+                        st.session_state['roadmap'] = roadmap
+                        st.session_state['roadmap_markdown'] = build_roadmap_markdown(roadmap)
+                        st.success("✅ 培育路线图生成完成！")
+                    except Exception as e:
+                        st.error(f"生成路线图失败：{e}")
+
+    # ---------- 路线图展示 ----------
+    if 'roadmap' in st.session_state:
+        roadmap = st.session_state['roadmap']
+
+        # 概览指标
+        summary = roadmap.get('summary', {})
+        r_col1, r_col2, r_col3, r_col4 = st.columns(4)
+        with r_col1:
+            st.markdown('<div class="metric-card">', unsafe_allow_html=True)
+            st.metric("目标政策", summary.get('target_policies', 0))
+            st.markdown('</div>', unsafe_allow_html=True)
+        with r_col2:
+            st.markdown('<div class="metric-card">', unsafe_allow_html=True)
+            st.metric("培育动作", summary.get('total_actions', 0))
+            st.markdown('</div>', unsafe_allow_html=True)
+        with r_col3:
+            st.markdown('<div class="metric-card metric-card-red">', unsafe_allow_html=True)
+            st.metric("立即行动", summary.get('phase_counts', {}).get('immediate', 0))
+            st.markdown('</div>', unsafe_allow_html=True)
+        with r_col4:
+            st.markdown('<div class="metric-card metric-card-orange">', unsafe_allow_html=True)
+            st.metric("中期培育", summary.get('phase_counts', {}).get('medium', 0))
+            st.markdown('</div>', unsafe_allow_html=True)
+
+        # LLM 增强标识
+        if roadmap.get('llm_enhanced'):
+            st.info(f"🧠 本路线图已使用 {roadmap.get('llm_provider', 'LLM')} 增强")
+        else:
+            st.info("ℹ️ 当前为规则生成的路线图，开启 LLM 增强可获得更具体建议")
+
+        st.divider()
+
+        # 阶段动作卡片
+        phased_actions = roadmap.get('phased_actions', {})
+        for phase in PHASE_ORDER:
+            actions = phased_actions.get(phase, [])
+            if not actions:
+                continue
+
+            st.markdown(f'<div class="roadmap-phase-title">{PHASE_LABELS[phase]}（{len(actions)} 项）</div>', unsafe_allow_html=True)
+
+            for action in actions:
+                difficulty = action.get('difficulty', '中')
+                diff_class = {
+                    "低": "roadmap-tag-difficulty-low",
+                    "中": "roadmap-tag-difficulty-medium",
+                    "高": "roadmap-tag-difficulty-high",
+                }.get(difficulty, "roadmap-tag-difficulty-medium")
+
+                related = action.get('related_policies', [])
+                related_html = f'<span class="roadmap-tag">关联：{"、".join(related[:3])}</span>' if related else ""
+
+                st.markdown(f"""
+                <div class="roadmap-action-card roadmap-action-card-phase-{phase}">
+                    <div class="roadmap-action-title">{action.get('title', '')}</div>
+                    <div class="roadmap-action-meta">{action.get('trigger_gap', '')}</div>
+                    <div class="roadmap-action-desc">{action.get('description', '')}</div>
+                    <div class="roadmap-action-tags">
+                        <span class="roadmap-tag roadmap-tag-owner">{action.get('owner', '')}</span>
+                        <span class="roadmap-tag {diff_class}">难度：{difficulty}</span>
+                        <span class="roadmap-tag">⏱ {action.get('estimated_time', '')}</span>
+                        <span class="roadmap-tag">💰 {action.get('estimated_cost', '')}</span>
+                        {related_html}
+                    </div>
+                </div>
+                """, unsafe_allow_html=True)
+
+        # 按政策展开的详细路线图
+        st.divider()
+        st.markdown('<div class="section-title">📋 按政策查看培育动作</div>', unsafe_allow_html=True)
+        for pr in roadmap.get('policy_roadmaps', []):
+            with st.expander(f"《{pr['policy_name']}》({pr['diagnosis']}，{pr['combined_score']} 分)"):
+                if pr['actions']:
+                    for action in pr['actions']:
+                        st.markdown(f"**{action.get('title', '')}**（{PHASE_LABELS.get(action.get('phase', ''), action.get('phase', ''))}）")
+                        st.markdown(f"- 说明：{action.get('description', '')}")
+                        st.markdown(f"- 负责方：{action.get('owner', '')} | 难度：{action.get('difficulty', '')} | 预计：{action.get('estimated_time', '')} / {action.get('estimated_cost', '')}")
+                else:
+                    st.info("该政策暂无培育动作，可能为立即申报或差距较小。")
+
+        # 导出
+        st.divider()
+        st.markdown('<div class="section-title">📥 导出培育路线图</div>', unsafe_allow_html=True)
+        roadmap_md = st.session_state.get('roadmap_markdown', build_roadmap_markdown(roadmap))
+        st.download_button(
+            label="下载培育路线图 (.md)",
+            data=roadmap_md,
+            file_name=f"{date_prefix}_{enterprise_name}_培育路线图.md",
+            mime="text/markdown",
+            use_container_width=True,
+            key="download_roadmap"
+        )
+    else:
+        st.info("👆 点击「生成路线图」按钮，系统将根据诊断结果自动生成培育建议。")
 
 
 with tab_markdown:

@@ -4,6 +4,7 @@
 """
 
 import json
+import re
 from datetime import datetime
 from typing import Dict, List, Any, Tuple
 
@@ -66,6 +67,21 @@ FIELD_LABELS = {
 def label_for(field_name: str) -> str:
     """获取字段的中文名称，没有映射时返回原值"""
     return FIELD_LABELS.get(field_name, field_name)
+
+
+def humanize_gap_item(item: str) -> str:
+    """
+    将失败/缺失项中的英文字段名翻译成中文标签。
+    用于兼容旧缓存结果（key 为英文）以及显示时的统一美化。
+    """
+    if not item:
+        return item
+    # 优先按中文/英文冒号拆分，只处理 key 部分
+    for sep in ("：", ":"):
+        if sep in item:
+            key, rest = item.split(sep, 1)
+            return f"{label_for(key.strip())}：{rest.lstrip()}"
+    return label_for(item)
 
 
 def save_json(file_path: str, data: Dict[str, Any]) -> None:
@@ -131,9 +147,9 @@ def match_policy(enterprise: Dict[str, Any], policy: Dict[str, Any]) -> Dict[str
             region_match = True
             break
     if not region_match:
-        failed.append(f"地区: 当前 {enterprise.get('region')}，政策适用 {policy_regions}")
+        failed.append(f"{label_for('region')}：当前 {enterprise.get('region')}，政策适用 {policy_regions}")
     else:
-        passed.append(f"地区: {enterprise.get('region')} 在政策适用范围内")
+        passed.append(f"{label_for('region')}：{enterprise.get('region')} 在政策适用范围内")
 
     # 逐项检查硬条件
     for condition_name, condition in hard_conditions.items():

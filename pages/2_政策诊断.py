@@ -5,7 +5,7 @@ import sys
 
 # 添加引擎路径
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-from engine.matcher import load_json, run_diagnosis
+from engine.matcher import load_json, run_diagnosis, humanize_gap_item
 from engine.diagnosis import run_enhanced_diagnosis
 from engine.llm_scorer import generate_material_outline
 from engine.dashboard import compute_dashboard_metrics, get_deadline_status, sort_results_for_display
@@ -424,12 +424,12 @@ if 'diagnosis_result' in st.session_state:
             if r['failed']:
                 st.markdown("**❌ 不满足条件：**")
                 for item in r['failed']:
-                    st.markdown(f"- {item}")
+                    st.markdown(f"- {humanize_gap_item(item)}")
 
             if r['unknown']:
                 st.markdown("**❓ 缺失数据：**")
                 for item in r['unknown']:
-                    st.markdown(f"- {item}")
+                    st.markdown(f"- {humanize_gap_item(item)}")
 
         with body_col2:
             # 统计数字
