@@ -109,8 +109,9 @@ def check_condition(value: Any, condition: Dict[str, Any], condition_name: str) 
     if 'required' in condition:
         required = condition['required']
         if bool(value) != required:
-            status = "需要" if required else "不需要"
-            return False, f"{label}：当前 {value}，要求{status}满足"
+            current = "是" if value else "否"
+            expected = "是" if required else "否"
+            return False, f"{label}：当前为“{current}”，政策要求必须为“{expected}”"
 
     if 'contains' in condition:
         required_items = condition['contains']
