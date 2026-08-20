@@ -122,25 +122,37 @@ st.markdown("""
 
 .profile-grid {
     display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
-    gap: 0.75rem;
+    grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+    gap: 0.5rem;
 }
 .profile-item {
     background: var(--apple-card-solid);
     border: 1px solid var(--apple-border);
     border-radius: var(--radius-md);
-    padding: 0.9rem 1rem;
+    padding: 0.55rem 0.7rem;
     box-shadow: var(--shadow-sm);
 }
 .profile-item-label {
-    font-size: 0.8rem;
+    font-size: 0.72rem;
     color: var(--apple-muted);
-    margin-bottom: 0.2rem;
+    margin-bottom: 0.15rem;
 }
 .profile-item-value {
-    font-size: 1rem;
+    font-size: 0.92rem;
     font-weight: 600;
     color: var(--apple-text);
+    line-height: 1.3;
+}
+.profile-item.full-width {
+    grid-column: 1 / -1;
+}
+.profile-subtitle {
+    font-size: 0.8rem;
+    font-weight: 600;
+    color: var(--apple-muted);
+    margin: 0.75rem 0 0.35rem;
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
 }
 
 .action-card {
@@ -392,35 +404,76 @@ with tab_result:
 
         ep = sections['enterprise_profile']
         if ep['available']:
-            st.markdown(ep['text'])
+            # 顶部一句话概要，紧凑显示
+            st.markdown(
+                f"<p style='color: var(--apple-muted); font-size: 0.9rem; margin-bottom: 0.75rem;'>"
+                f"{ep['text']}</p>",
+                unsafe_allow_html=True
+            )
 
-            profile_items = [
+            # 基础信息
+            st.markdown('<div class="profile-subtitle">基础信息</div>', unsafe_allow_html=True)
+            basic_items = [
                 ("所属行业", f"{ep['industry']}（{ep['sub_industry']}）"),
                 ("企业规模", f"{ep['scale']} / {ep['employees']} 人"),
                 ("所在地区", ep['region']),
                 ("成立年份", ep['founded_year']),
                 ("上年度营收", f"{ep['revenue']} 万元"),
                 ("上年度利润", f"{ep['profit']} 万元"),
-                ("研发投入", f"{ep['rd_investment']} 万元"),
-                ("研发占比", ep['rd_ratio']),
-                ("研发人员", f"{ep['rd_team_size']} 人 / {ep['rd_team_ratio']}"),
-                ("高新技术产品收入占比", ep['high_tech_income_ratio']),
-                ("发明专利", ep['invention_patents']),
-                ("实用新型", ep['utility_models']),
-                ("软件著作权", ep['software_copyrights']),
-                ("商标", ep['trademarks']),
-                ("已获资质", "、".join(ep['qualifications']) if ep['qualifications'] else "—"),
-                ("国家高新技术企业", "是" if ep['is_high_tech_enterprise'] else "否"),
-                ("研发准备金制度", "已建立" if ep['rd_accounting_system'] else "未建立"),
-                ("近三年重大事故", "有" if ep['has_major_accident'] else "无"),
             ]
-
             st.markdown('<div class="profile-grid">', unsafe_allow_html=True)
-            for label, value in profile_items:
+            for label, value in basic_items:
                 st.markdown(f"""
                 <div class="profile-item">
                     <div class="profile-item-label">{label}</div>
                     <div class="profile-item-value">{value}</div>
+                </div>
+                """, unsafe_allow_html=True)
+            st.markdown('</div>', unsafe_allow_html=True)
+
+            # 研发能力
+            st.markdown('<div class="profile-subtitle">研发能力</div>', unsafe_allow_html=True)
+            rd_items = [
+                ("研发投入", f"{ep['rd_investment']} 万元"),
+                ("研发占比", ep['rd_ratio']),
+                ("研发人员", f"{ep['rd_team_size']} 人 / {ep['rd_team_ratio']}"),
+                ("高新收入占比", ep['high_tech_income_ratio']),
+            ]
+            st.markdown('<div class="profile-grid">', unsafe_allow_html=True)
+            for label, value in rd_items:
+                st.markdown(f"""
+                <div class="profile-item">
+                    <div class="profile-item-label">{label}</div>
+                    <div class="profile-item-value">{value}</div>
+                </div>
+                """, unsafe_allow_html=True)
+            st.markdown('</div>', unsafe_allow_html=True)
+
+            # 资质与知识产权
+            st.markdown('<div class="profile-subtitle">资质与知识产权</div>', unsafe_allow_html=True)
+            ip_items = [
+                ("发明专利", ep['invention_patents']),
+                ("实用新型", ep['utility_models']),
+                ("软件著作权", ep['software_copyrights']),
+                ("商标", ep['trademarks']),
+                ("国家高企", "是" if ep['is_high_tech_enterprise'] else "否"),
+                ("研发准备金", "已建立" if ep['rd_accounting_system'] else "未建立"),
+                ("重大事故", "有" if ep['has_major_accident'] else "无"),
+            ]
+            st.markdown('<div class="profile-grid">', unsafe_allow_html=True)
+            for label, value in ip_items:
+                st.markdown(f"""
+                <div class="profile-item">
+                    <div class="profile-item-label">{label}</div>
+                    <div class="profile-item-value">{value}</div>
+                </div>
+                """, unsafe_allow_html=True)
+            # 已获资质单独占满一行
+            if ep['qualifications']:
+                st.markdown(f"""
+                <div class="profile-item full-width">
+                    <div class="profile-item-label">已获资质</div>
+                    <div class="profile-item-value">{'、'.join(ep['qualifications'])}</div>
                 </div>
                 """, unsafe_allow_html=True)
             st.markdown('</div>', unsafe_allow_html=True)
